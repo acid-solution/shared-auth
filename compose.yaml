@@ -1,0 +1,61 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: shared_auth
+      POSTGRES_USER: shared_auth
+      POSTGRES_PASSWORD: shared_auth
+    ports:
+      - "5434:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U shared_auth -d shared_auth"]
+      interval: 3s
+      timeout: 3s
+      retries: 20
+    volumes:
+      - shared_auth_postgres_data:/var/lib/postgresql/data
+
+  keygen:
+    build: .
+    entrypoint: ["/app/keygen"]
+    command: ["-out", "/keys/private.pem"]
+    volumes:
+      - shared_auth_keys:/keys
+
+  auth:
+    build: .
+    environment:
+      APP_ENV: development
+      GIN_MODE: release
+      HTTP_ADDR: :18082
+      DATABASE_URL: postgres://shared_auth:shared_auth@postgres:5432/shared_auth?sslmode=disable
+      JWT_PRIVATE_KEY_PATH: /keys/private.pem
+      JWT_KEY_ID: dev-key-1
+      JWT_ISSUER: shared-auth
+      VERIFICATION_HMAC_KEY: c2hhcmVkLWF1dGgtZGV2ZWxvcG1lbnQta2V5LTIwMjYtMDE=
+      BCRYPT_COST: "12"
+      COOKIE_SECURE: "false"
+      DEV_OUTBOX_ENABLED: ${DEV_OUTBOX_ENABLED:-true}
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-dev}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_FROM: ${RESEND_FROM:-}
+      JOBPILOT_ALLOWED_ORIGINS: http://127.0.0.1:5173,http://localhost:5173
+      STUDYFLOW_ALLOWED_ORIGINS: http://127.0.0.1:5174,http://localhost:5174
+    ports:
+      - "18082:18082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      keygen:
+        condition: service_completed_successfully
+    volumes:
+      - shared_auth_keys:/keys:ro
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:18082/health/ready >/dev/null"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+volumes:
+  shared_auth_postgres_data:
+  shared_auth_keys:

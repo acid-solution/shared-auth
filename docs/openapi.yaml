@@ -1,0 +1,269 @@
+openapi: 3.1.0
+info:
+  title: shared-auth API
+  version: 0.1.0
+  description: JobPilot 与 StudyFlow 共用的账号认证服务。开发环境可使用验证码收件箱，线上通过 Resend 发送邮件。
+servers:
+  - url: http://127.0.0.1:18082
+tags:
+  - name: Health
+  - name: Authentication
+  - name: Account
+  - name: Development
+paths:
+  /health/live:
+    get:
+      tags: [Health]
+      summary: 进程存活检查
+      responses:
+        "200": {description: 服务存活}
+  /health/ready:
+    get:
+      tags: [Health]
+      summary: 数据库就绪检查
+      responses:
+        "200": {description: 服务就绪}
+        "503": {$ref: "#/components/responses/Error"}
+  /.well-known/jwks.json:
+    get:
+      tags: [Authentication]
+      summary: 获取 JWT 验签公钥
+      responses:
+        "200":
+          description: JSON Web Key Set
+  /auth/v1/verifications:
+    post:
+      tags: [Authentication]
+      summary: 申请邮箱注册或重置密码验证码
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/VerificationRequest"}
+      responses:
+        "202":
+          description: 验证码请求已接收
+          content:
+            application/json:
+              schema: {$ref: "#/components/schemas/VerificationResponse"}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+        "429": {$ref: "#/components/responses/Error"}
+        "503": {$ref: "#/components/responses/Error"}
+  /auth/v1/register:
+    post:
+      tags: [Authentication]
+      summary: 创建账号并登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/RegisterRequest"}
+      responses:
+        "201": {$ref: "#/components/responses/IssueResponse"}
+        "409": {$ref: "#/components/responses/Error"}
+        "422": {$ref: "#/components/responses/Error"}
+  /auth/v1/login:
+    post:
+      tags: [Authentication]
+      summary: 使用邮箱登录
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/LoginRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/IssueResponse"}
+        "401": {$ref: "#/components/responses/Error"}
+  /auth/v1/token/refresh:
+    post:
+      tags: [Authentication]
+      summary: 轮换 Refresh Token 并签发新的 Access Token
+      description: Refresh Token 从对应应用的 HttpOnly Cookie 中读取。
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ClientRequest"}
+      responses:
+        "200": {$ref: "#/components/responses/IssueResponse"}
+        "401": {$ref: "#/components/responses/Error"}
+  /auth/v1/logout:
+    post:
+      tags: [Authentication]
+      summary: 撤销当前刷新会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/ClientRequest"}
+      responses:
+        "204": {description: 已退出；接口是幂等的}
+  /auth/v1/me:
+    get:
+      tags: [Account]
+      summary: 获取当前账号及已经绑定的身份
+      security: [{bearerAuth: []}]
+      responses:
+        "200":
+          description: 当前账号
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: {$ref: "#/components/schemas/Account"}
+        "401": {$ref: "#/components/responses/Error"}
+    delete:
+      tags: [Account]
+      summary: 注销当前账号
+      description: 校验当前密码后永久删除账号、邮箱身份和全部刷新会话；审计事件继续保留。
+      security: [{bearerAuth: []}]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/DeleteAccountRequest"}
+      responses:
+        "204": {description: 账号已注销，同时清除当前应用的 Refresh Cookie}
+        "400": {$ref: "#/components/responses/Error"}
+        "401": {$ref: "#/components/responses/Error"}
+  /auth/v1/password/reset:
+    post:
+      tags: [Account]
+      summary: 验证身份后重置密码并撤销全部会话
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: {$ref: "#/components/schemas/PasswordResetRequest"}
+      responses:
+        "204": {description: 密码已重置}
+        "422": {$ref: "#/components/responses/Error"}
+  /dev/outbox:
+    get:
+      tags: [Development]
+      summary: 查看开发验证码
+      description: 仅 APP_ENV=development 且 DEV_OUTBOX_ENABLED=true 时存在。
+      parameters:
+        - in: query
+          name: identifier
+          schema: {type: string}
+      responses:
+        "200": {description: 验证码投递记录}
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Error:
+      description: 统一错误响应
+      content:
+        application/json:
+          schema: {$ref: "#/components/schemas/ErrorEnvelope"}
+    IssueResponse:
+      description: 登录结果，同时设置应用专属 Refresh Cookie
+      headers:
+        Set-Cookie:
+          schema: {type: string}
+      content:
+        application/json:
+          schema:
+            type: object
+            properties:
+              data: {$ref: "#/components/schemas/TokenIssue"}
+  schemas:
+    VerificationRequest:
+      type: object
+      required: [client_id, email, purpose]
+      properties:
+        client_id: {type: string, enum: [jobpilot, studyflow]}
+        email: {type: string, format: email, examples: [person@example.com]}
+        purpose: {type: string, enum: [register, reset]}
+    VerificationResponse:
+      type: object
+      properties:
+        data:
+          type: object
+          properties:
+            challenge_id: {type: string, format: uuid}
+            expires_at: {type: string, format: date-time}
+            resend_after: {type: string, format: date-time}
+    RegisterRequest:
+      allOf:
+        - {$ref: "#/components/schemas/ChallengeRequest"}
+        - type: object
+          required: [password]
+          properties:
+            password: {type: string, minLength: 8, maxLength: 72, format: password}
+    LoginRequest:
+      type: object
+      required: [client_id, email, password]
+      properties:
+        client_id: {type: string, enum: [jobpilot, studyflow]}
+        email: {type: string, format: email}
+        password: {type: string, format: password}
+    ClientRequest:
+      type: object
+      required: [client_id]
+      properties:
+        client_id: {type: string, enum: [jobpilot, studyflow]}
+    ChallengeRequest:
+      type: object
+      required: [client_id, challenge_id, code]
+      properties:
+        client_id: {type: string, enum: [jobpilot, studyflow]}
+        challenge_id: {type: string, format: uuid}
+        code: {type: string, pattern: "^[0-9]{6}$"}
+    PasswordResetRequest:
+      allOf:
+        - {$ref: "#/components/schemas/ChallengeRequest"}
+        - type: object
+          required: [new_password]
+          properties:
+            new_password: {type: string, minLength: 8, maxLength: 72, format: password}
+    DeleteAccountRequest:
+      type: object
+      required: [current_password]
+      properties:
+        current_password: {type: string, format: password}
+    TokenIssue:
+      type: object
+      properties:
+        account: {$ref: "#/components/schemas/Account"}
+        access_token: {type: string}
+        token_type: {type: string, const: Bearer}
+        expires_at: {type: string, format: date-time}
+    Account:
+      type: object
+      properties:
+        user:
+          type: object
+          properties:
+            id: {type: string, format: uuid}
+            status: {type: string, enum: [active, disabled]}
+            created_at: {type: string, format: date-time}
+            updated_at: {type: string, format: date-time}
+        identities:
+          type: array
+          items:
+            type: object
+            properties:
+              id: {type: string, format: uuid}
+              kind: {type: string, const: email}
+              value: {type: string}
+              verified_at: {type: string, format: date-time}
+              created_at: {type: string, format: date-time}
+    ErrorEnvelope:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message, request_id]
+          properties:
+            code: {type: string}
+            message: {type: string}
+            request_id: {type: string}
