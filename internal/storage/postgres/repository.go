@@ -22,6 +22,17 @@ func NewRepository(database *sql.DB) *Repository {
 	return &Repository{database: database}
 }
 
+func (r *Repository) ActiveExchangeSession(ctx context.Context, userID, sessionID uuid.UUID, clientID string, now time.Time) (bool, error) {
+	var active bool
+	err := r.database.QueryRowContext(ctx, `SELECT EXISTS (
+ SELECT 1 FROM sessions s JOIN users u ON u.id=s.user_id
+ JOIN auth_clients c ON c.id=s.client_id
+ WHERE s.id=$1 AND s.user_id=$2 AND s.client_id=$3
+ AND s.revoked_at IS NULL AND s.expires_at>$4 AND u.status='active' AND c.enabled
+ AND EXISTS(SELECT 1 FROM auth_clients WHERE id='studyflow' AND enabled))`, sessionID, userID, clientID, now).Scan(&active)
+	return active, err
+}
+
 func (r *Repository) Client(ctx context.Context, id string) (domain.Client, error) {
 	var client domain.Client
 	var originsJSON string

@@ -20,6 +20,7 @@ type Principal struct {
 	UserID    uuid.UUID
 	SessionID uuid.UUID
 	ClientID  string
+	ExpiresAt time.Time
 }
 
 type Manager struct {
@@ -32,6 +33,7 @@ type Manager struct {
 
 type accessClaims struct {
 	SessionID string `json:"sid"`
+	Delegated bool   `json:"delegated,omitempty"`
 	jwt.RegisteredClaims
 }
 
@@ -95,7 +97,7 @@ func (m *Manager) Parse(raw string) (Principal, error) {
 		}
 		return &m.privateKey.PublicKey, nil
 	}, jwt.WithIssuer(m.issuer), jwt.WithExpirationRequired(), jwt.WithIssuedAt())
-	if err != nil || !parsed.Valid || len(claims.Audience) != 1 {
+	if err != nil || !parsed.Valid || len(claims.Audience) != 1 || claims.Delegated {
 		return Principal{}, ErrInvalid
 	}
 	userID, err := uuid.Parse(claims.Subject)
@@ -106,7 +108,7 @@ func (m *Manager) Parse(raw string) (Principal, error) {
 	if err != nil {
 		return Principal{}, ErrInvalid
 	}
-	return Principal{UserID: userID, SessionID: sessionID, ClientID: claims.Audience[0]}, nil
+	return Principal{UserID: userID, SessionID: sessionID, ClientID: claims.Audience[0], ExpiresAt: claims.ExpiresAt.Time}, nil
 }
 
 type JWK struct {

@@ -12,6 +12,8 @@ import (
 )
 
 type Config struct {
+	JobPilotExchangeSecret  string
+	StudyFlowMCPResource    string
 	Environment             string
 	HTTPAddr                string
 	DatabaseURL             string
@@ -34,6 +36,8 @@ type Config struct {
 
 func Load() (Config, error) {
 	configuration := Config{
+		JobPilotExchangeSecret:  strings.TrimSpace(os.Getenv("JOBPILOT_EXCHANGE_SECRET")),
+		StudyFlowMCPResource:    strings.TrimSpace(os.Getenv("STUDYFLOW_MCP_RESOURCE")),
 		Environment:             valueOrDefault("APP_ENV", "development"),
 		HTTPAddr:                valueOrDefault("HTTP_ADDR", "127.0.0.1:18082"),
 		DatabaseURL:             os.Getenv("DATABASE_URL"),

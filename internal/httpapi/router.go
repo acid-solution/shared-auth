@@ -74,6 +74,7 @@ func NewRouter(dependencies Dependencies) *gin.Engine {
 		api.POST("/register", h.register)
 		api.POST("/login", h.login)
 		api.POST("/token/refresh", h.refresh)
+		api.POST("/token/exchange", h.exchange)
 		api.POST("/logout", h.logout)
 		api.GET("/me", h.requireAccess(), h.me)
 		api.DELETE("/me", h.requireAccess(), h.deleteAccount)

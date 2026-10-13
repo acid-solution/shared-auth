@@ -8,6 +8,7 @@ import (
 	"encoding/pem"
 	"errors"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -89,6 +90,39 @@ func TestCompleteAccountLifecycle(t *testing.T) {
 	if len(registered.Account.Identities) != 1 || registered.Account.Identities[0].Value != "person@example.com" {
 		t.Fatalf("unexpected registered account: %+v", registered.Account)
 	}
+	t.Run("route delegation checks live session", func(t *testing.T) {
+		secret := "route-exchange-test-secret-32-characters"
+		resource := "http://127.0.0.1:8081/mcp"
+		if err := service.ConfigureExchange(secret, resource); err != nil {
+			t.Fatal(err)
+		}
+		input := auth.ExchangeInput{SubjectToken: registered.AccessToken, Resource: resource, Scope: auth.RouteScope, ImportKey: "route-test-request", ContentDigest: strings.Repeat("a", 64)}
+		if _, err := service.Exchange(ctx, "jobpilot", secret, input); err != nil {
+			t.Fatal(err)
+		}
+		p, err := manager.Parse(registered.AccessToken)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.Exec(`UPDATE sessions SET revoked_at=now() WHERE id=$1`, p.SessionID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Exchange(ctx, "jobpilot", secret, input); !errors.Is(err, domain.ErrUnauthorized) {
+			t.Fatal("revoked session accepted", err)
+		}
+		if _, err := database.Exec(`UPDATE sessions SET revoked_at=NULL WHERE id=$1`, p.SessionID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := database.Exec(`UPDATE users SET status='disabled' WHERE id=$1`, p.UserID); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := service.Exchange(ctx, "jobpilot", secret, input); !errors.Is(err, domain.ErrUnauthorized) {
+			t.Fatal("disabled account accepted", err)
+		}
+		if _, err := database.Exec(`UPDATE users SET status='active' WHERE id=$1`, p.UserID); err != nil {
+			t.Fatal(err)
+		}
+	})
 	var legacyOwnerColumns int
 	if err := database.QueryRow(`
 		SELECT count(*) FROM information_schema.columns

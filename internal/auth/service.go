@@ -74,15 +74,17 @@ type RefreshResult struct {
 }
 
 type Service struct {
-	store           Store
-	hasher          password.Hasher
-	tokens          *token.Manager
-	sender          verification.Sender
-	hmacKey         []byte
-	verificationTTL time.Duration
-	refreshTTL      time.Duration
-	now             func() time.Time
-	dummyHash       string
+	exchangeSecret   string
+	exchangeResource string
+	store            Store
+	hasher           password.Hasher
+	tokens           *token.Manager
+	sender           verification.Sender
+	hmacKey          []byte
+	verificationTTL  time.Duration
+	refreshTTL       time.Duration
+	now              func() time.Time
+	dummyHash        string
 }
 
 func NewService(store Store, hasher password.Hasher, tokens *token.Manager, sender verification.Sender, hmacKey []byte, verificationTTL, refreshTTL time.Duration) (*Service, error) {
