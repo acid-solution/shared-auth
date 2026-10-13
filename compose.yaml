@@ -32,6 +32,8 @@ services:
       JWT_PRIVATE_KEY_PATH: /keys/private.pem
       JWT_KEY_ID: dev-key-1
       JWT_ISSUER: shared-auth
+      JOBPILOT_EXCHANGE_SECRET: ${JOBPILOT_EXCHANGE_SECRET:-}
+      STUDYFLOW_MCP_RESOURCE: ${STUDYFLOW_MCP_RESOURCE:-}
       VERIFICATION_HMAC_KEY: c2hhcmVkLWF1dGgtZGV2ZWxvcG1lbnQta2V5LTIwMjYtMDE=
       BCRYPT_COST: "12"
       COOKIE_SECURE: "false"
