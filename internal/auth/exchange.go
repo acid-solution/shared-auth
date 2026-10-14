@@ -36,12 +36,12 @@ type exchangeStore interface {
 	ActiveExchangeSession(context.Context, uuid.UUID, uuid.UUID, string, time.Time) (bool, error)
 }
 
-func (s *Service) ConfigureExchange(secret, resource string) error {
+func (s *Service) ConfigureExchange(secret, resource string, allowHTTP ...bool) error {
 	if secret == "" && resource == "" {
 		return nil
 	}
 	u, err := url.Parse(resource)
-	if len(secret) < 32 || err != nil || u.Host == "" || (u.Scheme != "https" && !(u.Scheme == "http" && (u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1"))) || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
+	if len(secret) < 32 || err != nil || u.Hostname() == "" || (u.Scheme != "https" && !(u.Scheme == "http" && ((len(allowHTTP) > 0 && allowHTTP[0]) || u.Hostname() == "localhost" || u.Hostname() == "127.0.0.1"))) || u.RawQuery != "" || u.Fragment != "" || u.User != nil {
 		return domain.ErrInvalidInput
 	}
 	s.exchangeSecret, s.exchangeResource = secret, resource

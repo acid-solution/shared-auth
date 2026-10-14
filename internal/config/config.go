@@ -14,6 +14,7 @@ import (
 type Config struct {
 	JobPilotExchangeSecret  string
 	StudyFlowMCPResource    string
+	AllowInsecureRouteHTTP  bool
 	Environment             string
 	HTTPAddr                string
 	DatabaseURL             string
@@ -55,6 +56,10 @@ func Load() (Config, error) {
 		StudyFlowAllowedOrigins: splitList(valueOrDefault("STUDYFLOW_ALLOWED_ORIGINS", "http://127.0.0.1:5174,http://localhost:5174,http://127.0.0.1:8081,http://localhost:8081")),
 	}
 	var err error
+	configuration.AllowInsecureRouteHTTP, err = boolValue("ALLOW_INSECURE_ROUTE_HTTP", false)
+	if err != nil {
+		return Config{}, err
+	}
 	if configuration.DatabaseURL == "" {
 		return Config{}, errors.New("DATABASE_URL is required")
 	}

@@ -34,6 +34,26 @@ func TestDevelopmentDefaults(t *testing.T) {
 	}
 }
 
+func TestRouteHTTPOptInConfiguration(t *testing.T) {
+	t.Setenv("APP_ENV", "development")
+	t.Setenv("DATABASE_URL", "postgres://example")
+	t.Setenv("JWT_PRIVATE_KEY_PATH", "private.pem")
+	t.Setenv("VERIFICATION_HMAC_KEY", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))))
+	t.Setenv("EMAIL_PROVIDER", "dev")
+	t.Setenv("DEV_OUTBOX_ENABLED", "true")
+	for _, value := range []string{"", "false", "true", "typo"} {
+		t.Setenv("ALLOW_INSECURE_ROUTE_HTTP", value)
+		cfg, err := Load()
+		if value == "typo" {
+			if err == nil {
+				t.Fatal("invalid HTTP flag accepted")
+			}
+		} else if err != nil || cfg.AllowInsecureRouteHTTP != (value == "true") {
+			t.Fatal("incorrect HTTP opt-in", value, err)
+		}
+	}
+}
+
 func TestResendConfiguration(t *testing.T) {
 	t.Setenv("APP_ENV", "development")
 	t.Setenv("DATABASE_URL", "postgres://example")

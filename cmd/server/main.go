@@ -84,7 +84,7 @@ func run() error {
 	}
 
 	allowedOrigins := append([]string{}, configuration.JobPilotAllowedOrigins...)
-	if err := service.ConfigureExchange(configuration.JobPilotExchangeSecret, configuration.StudyFlowMCPResource); err != nil {
+	if err := service.ConfigureExchange(configuration.JobPilotExchangeSecret, configuration.StudyFlowMCPResource, configuration.AllowInsecureRouteHTTP); err != nil {
 		return errors.New("invalid token exchange configuration: require a 32-character secret and a fixed HTTPS MCP resource (loopback HTTP allowed)")
 	}
 	allowedOrigins = append(allowedOrigins, configuration.StudyFlowAllowedOrigins...)

@@ -146,3 +146,6 @@ TEST_DATABASE_URL='postgres://shared_auth:shared_auth@127.0.0.1:5434/shared_auth
 ## 后续接入
 
 下一阶段由 JobPilot 的 `identity.Resolver` 验证 JWKS、签发方和 `aud=jobpilot`，并把 JWT `sub` 转为现有 UUID `user_id`。本仓库当前不会修改 JobPilot 或 StudyFlow。
+# 路线导入 HTTP 测试
+
+`ALLOW_INSECURE_ROUTE_HTTP` 默认为 `false`。仅在明确的 HTTP 联调环境设为 `true` 时，令牌交换的固定 `STUDYFLOW_MCP_RESOURCE` 才允许非本机 HTTP 地址；受众、会话、权限和导入摘要验证保持不变。浏览器通过 HTTP 登录还需设置 `COOKIE_SECURE=false`。正式部署恢复 HTTPS 和安全 Cookie，不通过 HTTP 传输真实凭证。

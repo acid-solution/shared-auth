@@ -21,6 +21,23 @@ type exchangeFakeStore struct {
 	checked bool
 }
 
+func TestExchangeHTTPRequiresExplicitOptIn(t *testing.T) {
+	s := &Service{}
+	secret := strings.Repeat("s", 32)
+	resource := "http://192.0.2.1:18084/mcp"
+	if s.ConfigureExchange(secret, resource) == nil || s.ConfigureExchange(secret, resource, false) == nil {
+		t.Fatal("HTTP accepted without opt-in")
+	}
+	if err := s.ConfigureExchange(secret, resource, true); err != nil {
+		t.Fatal("explicit HTTP rejected", err)
+	}
+	for _, raw := range []string{"http://user:secret@example.com/mcp", "http://example.com/mcp?key=x", "http://example.com/mcp#fragment", "ftp://example.com/mcp", "http://:80/mcp"} {
+		if s.ConfigureExchange(secret, raw, true) == nil {
+			t.Fatal("URL structure checks bypassed", raw)
+		}
+	}
+}
+
 func (f *exchangeFakeStore) ActiveExchangeSession(context.Context, uuid.UUID, uuid.UUID, string, time.Time) (bool, error) {
 	f.checked = true
 	return f.active, nil
