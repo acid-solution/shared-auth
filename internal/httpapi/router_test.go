@@ -160,3 +160,54 @@ func TestDeleteAccountClearsCurrentClientCookie(t *testing.T) {
 		}
 	}
 }
+
+func TestDeleteAccountPreflightAllowsBothProductOrigins(t *testing.T) {
+	origins := []string{"http://localhost:5173", "http://localhost:5174"}
+	router := NewRouter(Dependencies{Application: fakeApplication{}, AllowedOrigins: origins})
+	for _, origin := range origins {
+		t.Run(origin, func(t *testing.T) {
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodOptions, "/auth/v1/me", nil)
+			request.Header.Set("Origin", origin)
+			request.Header.Set("Access-Control-Request-Method", http.MethodDelete)
+			request.Header.Set("Access-Control-Request-Headers", "authorization,content-type")
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != http.StatusNoContent || recorder.Header().Get("Access-Control-Allow-Origin") != origin || recorder.Header().Get("Access-Control-Allow-Credentials") != "true" {
+				t.Fatalf("preflight status=%d headers=%v", recorder.Code, recorder.Header())
+			}
+			if !strings.Contains(recorder.Header().Get("Access-Control-Allow-Methods"), http.MethodDelete) {
+				t.Fatalf("DELETE is not allowed: %v", recorder.Header())
+			}
+		})
+	}
+}
+
+func TestDeleteAccountRejectsMissingCredentialsAndWrongPassword(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		body      string
+		principal token.Principal
+		deleteErr error
+		status    int
+		code      string
+	}{
+		{name: "no login", body: `{"current_password":"password"}`, status: http.StatusUnauthorized, code: "unauthorized"},
+		{name: "no password", body: `{}`, principal: token.Principal{UserID: uuid.New(), ClientID: "jobpilot"}, status: http.StatusBadRequest, code: "invalid_request"},
+		{name: "wrong password", body: `{"current_password":"wrong"}`, principal: token.Principal{UserID: uuid.New(), ClientID: "jobpilot"}, deleteErr: domain.ErrPasswordMismatch, status: http.StatusUnauthorized, code: "invalid_password"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			router := NewRouter(Dependencies{Application: fakeApplication{principal: tc.principal, deleteErr: tc.deleteErr}})
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodDelete, "/auth/v1/me", strings.NewReader(tc.body))
+			request.Header.Set("Content-Type", "application/json")
+			request.Header.Set("Authorization", "Bearer access-token")
+			router.ServeHTTP(recorder, request)
+			if recorder.Code != tc.status || !strings.Contains(recorder.Body.String(), `"code":"`+tc.code+`"`) {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			if recorder.Header().Get("Set-Cookie") != "" {
+				t.Fatal("failed deletion must not clear the login cookie")
+			}
+		})
+	}
+}
